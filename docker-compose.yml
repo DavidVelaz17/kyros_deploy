@@ -1,0 +1,114 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    # Sin "ports": no se expone al host ni a internet, solo alcanzable dentro de la red de
+    # docker-compose. Para inspeccionarla desde tu máquina usa `docker compose exec mysql mysql ...`.
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    build:
+      context: ../Back/demokyros
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      UPLOADS_DIR: /app/uploads
+    volumes:
+      - uploads-data:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+    # Tampoco expone puertos al host: solo Caddy y el frontend (server-side) le hablan, por la
+    # red interna de Docker.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: ../Front/kyros-front
+    restart: unless-stopped
+    environment:
+      # Nombre de servicio de Docker Compose, no un dominio público: las llamadas del servidor
+      # de Next (Server Actions) al backend nunca salen a internet.
+      BACKEND_API_URL: http://backend:8080
+      # A propósito sin definir: en producción las fotos se resuelven por ruta relativa contra el
+      # dominio público (ver Caddyfile, resolveFotoUrl). Si se define aquí, se rompen las fotos.
+      # PHOTOS_PUBLIC_BASE_URL:
+      # false SOLO para probar en local sin dominio/HTTPS (DOMAIN=:80) — si no, el login parece
+      # funcionar pero la cookie de sesión nunca se guarda (ver session.ts). En producción con
+      # dominio real, dejar en true (o quitar la variable del .env, true es el default).
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+    depends_on:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - frontend
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# mysql-data y uploads-data quedan atados a DATA_DIR (ver .env): en el servidor, apunta al
+# volumen de Hetzner ya montado (ej. /mnt/kyros-data), para que los datos importantes vivan ahí
+# y no en el disco raíz del servidor. En tu Mac, sin DATA_DIR en el .env, cae en ./data (una
+# carpeta local junto a este archivo, en .gitignore) y todo sigue funcionando igual para pruebas.
+volumes:
+  mysql-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/mysql
+  uploads-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/uploads
+  caddy-data:
+  caddy-config:

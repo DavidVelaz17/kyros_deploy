@@ -1,0 +1,17 @@
+# {$DOMAIN} controla el modo:
+#   - Un dominio real (ej. kayros.mx) -> Caddy provisiona HTTPS automático con Let's Encrypt.
+#   - ":80" -> HTTP plano sin TLS, para probar todo el stack en local (ver .env.example).
+{$DOMAIN} {
+	encode gzip
+
+	# Las fotos de alumnos las sirve el backend directo desde disco (WebConfig.java), no el
+	# frontend. El navegador las pide con ruta relativa (ver resolveFotoUrl en
+	# src/lib/api/students.ts), así que tienen que resolver contra este mismo dominio.
+	handle /uploads/* {
+		reverse_proxy backend:8080
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
