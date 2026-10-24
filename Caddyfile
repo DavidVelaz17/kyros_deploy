@@ -1,5 +1,8 @@
 # {$DOMAIN} controla el modo:
 #   - Un dominio real (ej. kayros.mx) -> Caddy provisiona HTTPS automático con Let's Encrypt.
+#     Para cubrir también "www", pon los dos separados por espacio en la misma variable
+#     (ej. "kayros.mx www.kayros.mx") — Caddy los toma como varios sitios para este mismo bloque,
+#     cada uno con su propio certificado.
 #   - ":80" -> HTTP plano sin TLS, para probar todo el stack en local (ver .env.example).
 {$DOMAIN} {
 	encode gzip

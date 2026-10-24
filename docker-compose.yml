@@ -36,6 +36,11 @@ services:
       JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
       UPLOADS_DIR: /app/uploads
+      # El servidor vive en Alemania: sin esto, LocalDate.now()/LocalDateTime.now() (ej. el año de
+      # folio en EstudianteImportExportService) usarían la hora de Berlín en vez de la de México.
+      # Los timestamps absolutos (Instant, ver Log.timeStamp) no dependen de esto — siguen siendo
+      # UTC real; esto solo afecta a los cálculos de "hoy"/"ahora" del propio JVM.
+      TZ: America/Mexico_City
     volumes:
       - uploads-data:/app/uploads
     depends_on:
@@ -64,6 +69,13 @@ services:
       # funcionar pero la cookie de sesión nunca se guarda (ver session.ts). En producción con
       # dominio real, dejar en true (o quitar la variable del .env, true es el default).
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      # Secreto para derivar la llave con la que cada navegador cifra su copia local de los datos
+      # (ver src/lib/auth/cache-key.ts en kyros-front). Cambiarlo solo hace que todos los equipos
+      # vuelvan a descargar los datos una vez; no se pierde nada.
+      CACHE_ENCRYPTION_SECRET: ${CACHE_ENCRYPTION_SECRET}
+      # Ver el comentario junto a TZ en el servicio "backend": mismo motivo, para cualquier
+      # `new Date()` sin zona horaria explícita que corra del lado del servidor (Server Actions).
+      TZ: America/Mexico_City
     depends_on:
       - backend
     logging:
